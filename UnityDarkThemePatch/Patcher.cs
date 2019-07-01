@@ -61,13 +61,17 @@ namespace UnityDarkThemePatch
         private readonly int JumpInstructionOffset_2019_0 = -1;
         private readonly int JumpInstructionOffset_2019_2 = -1;
 
-        private readonly byte DarkSkinByte = 0x74;
-        private readonly byte LightSkinByte = 0x75;
+        // The dark skin byte has changed from 2019.1x from x74 to x75.
+
+        private readonly byte SkinByte74 = 0x74;
+        private readonly byte SkinByte75 = 0x75;
 
         struct UnityVersionContainer
         {
             public byte[] RegionByteArray;
             public int InstructionOffset;
+            public byte LightSkinIndicator;
+            public byte DarkSkinIndicator;
         }
 
         private UnityVersionContainer FindRegionBytesByVersion(UnityBinaryVersion version) 
@@ -78,6 +82,8 @@ namespace UnityDarkThemePatch
             {
                 versionContainer.RegionByteArray = RegionBytes_Pre2018_3;
                 versionContainer.InstructionOffset = JumpInstructionOffset_Pre2018_3;
+                versionContainer.LightSkinIndicator = SkinByte75;
+                versionContainer.DarkSkinIndicator = SkinByte74;
                 return versionContainer;
             }
 
@@ -85,6 +91,8 @@ namespace UnityDarkThemePatch
             {
                 versionContainer.RegionByteArray = RegionBytes_2018_3;
                 versionContainer.InstructionOffset = JumpInstructionOffset_2018_3;
+                versionContainer.LightSkinIndicator = SkinByte75;
+                versionContainer.DarkSkinIndicator = SkinByte74;
                 return versionContainer;
             }
 
@@ -92,12 +100,16 @@ namespace UnityDarkThemePatch
             {
                 versionContainer.RegionByteArray = RegionBytes_2019_0;
                 versionContainer.InstructionOffset = JumpInstructionOffset_2019_0;
+                versionContainer.LightSkinIndicator = SkinByte74;
+                versionContainer.DarkSkinIndicator = SkinByte75;
                 return versionContainer;
             }
 
             //must be newer, will break as unity adds new versions, needs to be added to sequentially as the AOB changes
             versionContainer.RegionByteArray = RegionBytes_2019_2;
             versionContainer.InstructionOffset = JumpInstructionOffset_2019_2;
+            versionContainer.LightSkinIndicator = SkinByte74;
+            versionContainer.DarkSkinIndicator = SkinByte75;
             return versionContainer;
         }
 
@@ -118,14 +130,14 @@ namespace UnityDarkThemePatch
                 //RegionBytes = UnityExecutable.ExecutableVersion >= UnityBinaryVersion.UNITY_2018_3_0 ? RegionBytes_2018_3 : RegionBytes_Pre2018_3;
                 //JumpInstructionOffset = UnityExecutable.ExecutableVersion >= UnityBinaryVersion.UNITY_2018_3_0 ? JumpInstructionOffsetVersionB : JumpInstructionOffsetVersionA;
                 PatchableByteAddress = BinaryHelpers.FindJumpInstructionAddress(UnityExecutable.ExecutablePath, currentVersion.RegionByteArray, currentVersion.InstructionOffset);
-                PatchableByteValue = GetPatchableByteValue();
-                if (PatchableByteValue == DarkSkinByte)
+                PatchableByteValue = GetPatchableByteValue(currentVersion);
+                if (PatchableByteValue == currentVersion.DarkSkinIndicator)
                 {
-                    ConsoleHelpers.YesNoChoice("Revert to light skin?", () => PatchExecutable(LightSkinByte));
+                    ConsoleHelpers.YesNoChoice("Revert to light skin?", () => PatchExecutable(currentVersion.LightSkinIndicator));
                 }
                 else
                 {
-                    ConsoleHelpers.YesNoChoice("Apply dark skin patch?", () => PatchExecutable(DarkSkinByte));
+                    ConsoleHelpers.YesNoChoice("Apply dark skin patch?", () => PatchExecutable(currentVersion.DarkSkinIndicator));
                 }
             }
         }
@@ -153,16 +165,17 @@ namespace UnityDarkThemePatch
         /// <summary>
         /// Gets the value of the patch byte in the Unity executable.
         /// </summary>
+        /// <param name="currentVersion"></param>
         /// <returns>The value of the patch byte.</returns>
-        private byte GetPatchableByteValue()
+        private byte GetPatchableByteValue(UnityVersionContainer currentVersion)
         {
             ConsoleHelpers.Write("Patch status: ");
             var jumpInstructionByte = BinaryHelpers.ReadByteAtAddress(UnityExecutable.ExecutablePath, PatchableByteAddress);
-            if (jumpInstructionByte == 0x75)
+            if (jumpInstructionByte == currentVersion.LightSkinIndicator)
             {
                 ConsoleHelpers.WriteLine($"Light skin (unpatched) [0x{jumpInstructionByte:X} @ 0x{PatchableByteAddress:X}]", ConsoleColor.Blue);
             }
-            else if (jumpInstructionByte == 0x74)
+            else if (jumpInstructionByte == currentVersion.DarkSkinIndicator)
             {
                 ConsoleHelpers.WriteLine($"Dark skin (patched) [0x{jumpInstructionByte:X} @ 0x{PatchableByteAddress:X}]", ConsoleColor.Green);
             }
